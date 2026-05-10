@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ✅ Aggiunto: necessario per NextAuth (magic link / email sign-in)
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  events   Event[]
+  rsvps    RSVP[]
+
+  sentInvites     Invite[] @relation("SentInvites")
+  receivedInvites Invite[] @relation("ReceivedInvites")
+}
+
+model Event {
+  id           String   @id @default(cuid())
+  title        String
+  description  String?  // ✅ reso opzionale
+  date         DateTime
+  location     String
+  maxAttendees Int?
+  isPublic     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  rsvps   RSVP[]
+  invites Invite[]
+}
+
+model Invite {
+  id        String       @id @default(cuid())
+  token     String       @unique @default(cuid()) // token univoco per il link d'invito
+  email     String?      // opzionale: se vuoi inviare a una email specifica
+  status    InviteStatus @default(PENDING)
+  expiresAt DateTime?    // opzionale: scadenza del link
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  eventId   String
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  invitedById String
+  invitedBy   User   @relation("SentInvites", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  acceptedById String?
+  acceptedBy   User?  @relation("ReceivedInvites", fields: [acceptedById], references: [id], onDelete: SetNull)
+
+  @@unique([email, eventId]) // una sola email per evento
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+model RSVP {
+  id        String     @id @default(cuid())
+  status    RSVPStatus // ✅ corretto typo: era RVSPStatus
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  userId  String
+  eventId String
+  user    User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event   Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+}
+
+enum RSVPStatus { // ✅ corretto typo: era RVSPStatus
+  GOING
+  NOT_GOING
+  MAYBE
+}
